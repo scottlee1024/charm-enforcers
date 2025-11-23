@@ -1,30 +1,62 @@
 import React, { useState } from 'react';
-import { Shield, Key, User, ChevronRight, Lock, AlertCircle } from 'lucide-react';
+import { Shield, Key, User, ChevronRight, Lock, AlertCircle, Loader2, Mail } from 'lucide-react';
+import { supabase } from '../services/supabase';
 
 interface LoginScreenProps {
     onLoginSuccess: () => void;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isSignUp, setIsSignUp] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [message, setMessage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
+        setMessage(null);
 
-        // Simulate network delay for effect
-        setTimeout(() => {
-            if (username === 'test' && password === '123') {
-                onLoginSuccess();
+        try {
+            if (isSignUp) {
+                // --- REGISTRATION LOGIC ---
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+
+                // Check if session was created immediately (Email confirmation disabled in Supabase)
+                if (data.session) {
+                    onLoginSuccess();
+                } else {
+                    // Email confirmation IS required
+                    setMessage('Registration successful! Please check your email inbox to confirm your account before logging in.');
+                    setIsSignUp(false); // Switch back to login mode so they can login after clicking email
+                }
             } else {
-                setError('Invalid credentials. Access denied.');
-                setIsLoading(false);
+                // --- LOGIN LOGIC ---
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+                if (error) {
+                    // Provide more helpful error messages
+                    if (error.message.includes('Invalid login credentials')) {
+                        throw new Error('Incorrect email or password. If you just registered, please verify your email address.');
+                    }
+                    throw error;
+                }
+                onLoginSuccess();
             }
-        }, 800);
+        } catch (err: any) {
+            setError(err.message || 'Authentication failed');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -48,30 +80,35 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                         Charm Enforcers
                     </h1>
                     <div className="flex items-center gap-2 mt-2">
-                         <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                         <span className="text-xs text-red-400 font-mono tracking-widest uppercase">System Locked</span>
+                         <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
+                         <span className="text-xs text-cyan-400 font-mono tracking-widest uppercase">Secure Network</span>
                     </div>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleLogin} className="bg-slate-900/60 backdrop-blur-md border border-slate-700 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+                <form onSubmit={handleAuth} className="bg-slate-900/60 backdrop-blur-md border border-slate-700 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
                     {/* Decorative Corner */}
                     <div className="absolute top-0 right-0 p-3">
                         <Lock size={16} className="text-slate-600" />
                     </div>
 
+                    <h2 className="text-xl font-bold text-white mb-6 text-center uppercase">
+                        {isSignUp ? 'New Operative Registration' : 'Operative Login'}
+                    </h2>
+
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Operative ID</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email Frequency</label>
                             <div className="relative group">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={18} />
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors" size={18} />
                                 <input 
-                                    type="text" 
-                                    value={username}
-                                    onChange={(e) => { setUsername(e.target.value); setError(null); }}
+                                    type="email" 
+                                    value={email}
+                                    onChange={(e) => { setEmail(e.target.value); setError(null); }}
                                     className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono"
-                                    placeholder="Enter username"
+                                    placeholder="agent@example.com"
                                     autoFocus
+                                    required
                                 />
                             </div>
                         </div>
@@ -85,15 +122,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                                     value={password}
                                     onChange={(e) => { setPassword(e.target.value); setError(null); }}
                                     className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono"
-                                    placeholder="Enter password"
+                                    placeholder="••••••••"
+                                    required
                                 />
                             </div>
                         </div>
 
                         {error && (
-                            <div className="flex items-center gap-2 text-red-400 bg-red-950/30 p-3 rounded-lg border border-red-900/50 animate-in fade-in slide-in-from-top-1">
-                                <AlertCircle size={16} />
-                                <span className="text-xs font-bold">{error}</span>
+                            <div className="flex items-start gap-2 text-red-400 bg-red-950/30 p-3 rounded-lg border border-red-900/50 animate-in fade-in slide-in-from-top-1">
+                                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                                <span className="text-xs font-bold leading-tight">{error}</span>
+                            </div>
+                        )}
+
+                        {message && (
+                            <div className="flex items-start gap-2 text-green-400 bg-green-950/30 p-3 rounded-lg border border-green-900/50 animate-in fade-in slide-in-from-top-1">
+                                <Shield size={16} className="mt-0.5 shrink-0" />
+                                <span className="text-xs font-bold leading-tight">{message}</span>
                             </div>
                         )}
 
@@ -107,12 +152,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                             `}
                         >
                             {isLoading ? (
-                                <span className="animate-pulse">AUTHENTICATING...</span>
+                                <>
+                                    <Loader2 size={18} className="animate-spin" /> PROCESSING...
+                                </>
                             ) : (
                                 <>
-                                    ACCESS TERMINAL <ChevronRight size={18} />
+                                    {isSignUp ? 'REGISTER IDENTITY' : 'ACCESS TERMINAL'} <ChevronRight size={18} />
                                 </>
                             )}
+                        </button>
+                    </div>
+
+                    <div className="mt-6 text-center">
+                        <button 
+                            type="button"
+                            onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null); }}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 underline font-mono tracking-wide"
+                        >
+                            {isSignUp ? '<< RETURN TO LOGIN' : 'NEW RECRUIT? CREATE ID >>'}
                         </button>
                     </div>
                 </form>

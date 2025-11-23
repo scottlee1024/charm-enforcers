@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MainMenu from './components/MainMenu';
 import GameScreen from './components/GameScreen';
 import DeckBuilder from './components/DeckBuilder';
@@ -7,9 +7,10 @@ import ExplorationScreen from './components/ExplorationScreen';
 import LoginScreen from './components/LoginScreen';
 import { SavedDeck, AppScreen, Enemy } from './types';
 import { INITIAL_SAVED_DECKS, PIRATE_MODEL_URL } from './constants';
+import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
-    // Initial screen is now 'login'
+    // Initial screen is 'login', but we check session immediately
     const [currentScreen, setCurrentScreen] = useState<AppScreen>('login');
     
     // State for Deck Management
@@ -26,6 +27,27 @@ const App: React.FC = () => {
     // Exploration State
     const [defeatedEnemies, setDefeatedEnemies] = useState<string[]>([]);
     const [activeEnemy, setActiveEnemy] = useState<Enemy | null>(null);
+
+    // Check for existing session
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+                setCurrentScreen('menu');
+            }
+        });
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session) {
+                setCurrentScreen('menu');
+            } else {
+                setCurrentScreen('login');
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     const handleSaveDeck = (deck: SavedDeck) => {
         setSavedDecks(prev => {
