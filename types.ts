@@ -21,6 +21,12 @@ export enum FormationType {
     Spread = 'Spread', // 展开 (蓄能/掩护)
 }
 
+export interface StatusEffects {
+    isDisarmed: boolean; // Attack <= 0
+    isBroken: boolean;   // Defense <= 0
+    confusedDuration: number; // Turns remaining for Confusion (Charm <= 0)
+}
+
 export interface Card {
     id: string;
     name: string;
@@ -49,6 +55,7 @@ export interface Character {
     defense: number; // Armor
     intelligence: number;
     charmThreshold: number; // Sanity/Resist
+    maxCharmThreshold: number;
     avatarUrl: string;
     modelUrl?: string; // URL to .glb file
     modelScale?: number; // Scale adjustment for 3D model
@@ -56,6 +63,7 @@ export interface Character {
     skillCost: number;
     skillDescription: string;
     color: string;
+    statuses: StatusEffects;
 }
 
 export interface Enemy {
@@ -66,9 +74,12 @@ export interface Enemy {
     attack: number;
     defense: number;
     charmThreshold: number; // Max 100
-    intent: 'Attack' | 'Buff' | 'Debuff' | 'Charge';
+    maxCharmThreshold: number;
+    intent: 'Attack' | 'Buff' | 'Debuff' | 'Charge' | 'Self-Hit' | 'Stunned';
     nextMoveValue: number;
     modelUrl?: string; // Optional custom model
+    intelligence: number; // Added for core attribute comparison
+    statuses: StatusEffects;
 }
 
 export interface GameState {
@@ -92,53 +103,3 @@ export interface GameState {
 }
 
 export type AppScreen = 'login' | 'menu' | 'hero_selection' | 'game' | 'deckbuilder' | 'exploration';
-
-// Fix for React Three Fiber Intrinsic Elements
-// Augments the JSX namespace to recognize Three.js elements used in R3F components
-declare global {
-    namespace JSX {
-        interface IntrinsicElements {
-            ambientLight: any;
-            directionalLight: any;
-            pointLight: any;
-            mesh: any;
-            group: any;
-            primitive: any;
-            planeGeometry: any;
-            meshBasicMaterial: any;
-            cylinderGeometry: any;
-            meshStandardMaterial: any;
-            sphereGeometry: any;
-            boxGeometry: any;
-            circleGeometry: any;
-            gridHelper: any;
-            stars: any; // For drei stars
-            ringGeometry: any;
-            torusGeometry: any;
-        }
-    }
-
-    namespace React {
-        namespace JSX {
-            interface IntrinsicElements {
-                ambientLight: any;
-                directionalLight: any;
-                pointLight: any;
-                mesh: any;
-                group: any;
-                primitive: any;
-                planeGeometry: any;
-                meshBasicMaterial: any;
-                cylinderGeometry: any;
-                meshStandardMaterial: any;
-                sphereGeometry: any;
-                boxGeometry: any;
-                circleGeometry: any;
-                gridHelper: any;
-                stars: any;
-                ringGeometry: any;
-                torusGeometry: any;
-            }
-        }
-    }
-}

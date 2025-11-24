@@ -83,6 +83,9 @@ const App: React.FC = () => {
             attack: isBoss ? 20 : 10,
             defense: isBoss ? 30 : 5,
             charmThreshold: 100,
+            maxCharmThreshold: 100,
+            intelligence: isBoss ? 25 : 15,
+            statuses: { isDisarmed: false, isBroken: false, confusedDuration: 0 },
             intent: 'Attack',
             nextMoveValue: isBoss ? 20 : 10,
             modelUrl: PIRATE_MODEL_URL

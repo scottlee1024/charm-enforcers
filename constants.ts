@@ -11,6 +11,12 @@ export const KAYLA_MODEL_URL = 'https://raw.githubusercontent.com/scottlee1024/g
 export const LINA_MODEL_URL = 'https://raw.githubusercontent.com/scottlee1024/game-assets/main/Steampunk_Commander_1122180253_texture.glb';
 export const PIRATE_MODEL_URL = 'https://raw.githubusercontent.com/scottlee1024/game-assets/main/Cyber_Gladiator_1123023056_texture.glb';
 
+const DEFAULT_STATUSES = {
+    isDisarmed: false,
+    isBroken: true, // Starts with 0 def usually, so technically broken until buffed? Or logically broken only if reduced to 0. Let's init false.
+    confusedDuration: 0
+};
+
 export const HEROES: Record<string, Character> = {
     kayla: {
         id: 'kayla',
@@ -21,13 +27,15 @@ export const HEROES: Record<string, Character> = {
         defense: 0,
         intelligence: 10,
         charmThreshold: 100,
+        maxCharmThreshold: 100,
         avatarUrl: KAYLA_SKIN_URL,
         modelUrl: KAYLA_MODEL_URL,
         modelScale: 1.1,
         skillName: 'Fire at Will',
         skillCost: 1,
         skillDescription: 'Next Destruction card dmg +50% (Synergy: +75%)',
-        color: 'text-red-500 border-red-500 shadow-red-500/50'
+        color: 'text-red-500 border-red-500 shadow-red-500/50',
+        statuses: { ...DEFAULT_STATUSES, isBroken: true }
     },
     lina: {
         id: 'lina',
@@ -38,13 +46,15 @@ export const HEROES: Record<string, Character> = {
         defense: 0,
         intelligence: 15,
         charmThreshold: 100,
+        maxCharmThreshold: 100,
         avatarUrl: 'https://i.ibb.co/FLm3WPYR/01.png',
         modelUrl: LINA_MODEL_URL,
         modelScale: 1.1,
         skillName: 'Dream Tune',
         skillCost: 2,
         skillDescription: 'Boost next Charm card effect 150% + 25% Int',
-        color: 'text-pink-500 border-pink-500 shadow-pink-500/50'
+        color: 'text-pink-500 border-pink-500 shadow-pink-500/50',
+        statuses: { ...DEFAULT_STATUSES, isBroken: true }
     },
     ella: {
         id: 'ella',
@@ -55,11 +65,13 @@ export const HEROES: Record<string, Character> = {
         defense: 0,
         intelligence: 25,
         charmThreshold: 100,
+        maxCharmThreshold: 100,
         avatarUrl: 'https://picsum.photos/seed/ella/200/200',
         skillName: 'Supercalc',
         skillCost: 2,
         skillDescription: 'Draw 2 cards. (Synergy: Draw 3)',
-        color: 'text-blue-500 border-blue-500 shadow-blue-500/50'
+        color: 'text-blue-500 border-blue-500 shadow-blue-500/50',
+        statuses: { ...DEFAULT_STATUSES, isBroken: true }
     },
     fiona: {
         id: 'fiona',
@@ -70,11 +82,13 @@ export const HEROES: Record<string, Character> = {
         defense: 0,
         intelligence: 10,
         charmThreshold: 100,
+        maxCharmThreshold: 100,
         avatarUrl: 'https://picsum.photos/seed/fiona/200/200',
         skillName: 'Barrier',
         skillCost: 1,
         skillDescription: 'Gain 10 Defense. (Synergy: +5)',
-        color: 'text-green-500 border-green-500 shadow-green-500/50'
+        color: 'text-green-500 border-green-500 shadow-green-500/50',
+        statuses: { ...DEFAULT_STATUSES, isBroken: true }
     }
 };
 

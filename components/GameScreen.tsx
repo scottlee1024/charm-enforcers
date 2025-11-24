@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, Suspense, useRef } from 'react';
-import { Activity, Shield, Skull, Users, Sparkles, Sword, ChevronRight, BarChart2, LogOut, Loader2, Heart, Zap } from 'lucide-react';
+import { Activity, Shield, Skull, Users, Sparkles, Sword, ChevronRight, BarChart2, LogOut, Loader2, Heart, Zap, Brain, AlertTriangle, EyeOff } from 'lucide-react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Grid } from '@react-three/drei';
 import { HEROES } from '../constants';
@@ -9,7 +9,7 @@ import CardComponent from './CardComponent';
 import StatsModal from './StatsModal';
 import HeroModel3D from './HeroModel3D';
 import EnemyModel3D from './EnemyModel3D';
-import { checkSynergy, calculateDamage, calculateCost } from '../services/gameLogic';
+import { checkSynergy, calculateDamage, calculateCost, updateStatuses, shouldNegateEffect } from '../services/gameLogic';
 import { audioService } from '../services/audioService';
 import * as THREE from 'three';
 
@@ -209,7 +209,7 @@ const HeroStatusPanel = ({ character, isFront }: { character: Character, isFront
                 )}
             </div>
             
-            <div className="relative h-6 bg-slate-900 rounded overflow-hidden border border-slate-700/50">
+            <div className="relative h-6 bg-slate-900 rounded overflow-hidden border border-slate-700/50 mb-2">
                 <div 
                     className={`absolute top-0 left-0 h-full ${barColor} transition-all duration-300`} 
                     style={{ width: `${(character.currentHp / character.maxHp) * 100}%` }}
@@ -217,6 +217,15 @@ const HeroStatusPanel = ({ character, isFront }: { character: Character, isFront
                 <div className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-white drop-shadow-md z-10">
                     {character.currentHp} / {character.maxHp}
                 </div>
+            </div>
+
+            {/* Status Icons */}
+            <div className="flex gap-2 mt-1">
+                {character.statuses.isBroken && (
+                    <div className="text-[10px] bg-red-900/80 text-white px-1.5 py-0.5 rounded border border-red-500 flex items-center gap-1 animate-pulse">
+                        <Shield size={10} className="text-red-300"/> BROKEN
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -245,15 +254,45 @@ const EnemyStatusPanel = ({ enemy }: { enemy: Enemy }) => {
                 </div>
             </div>
 
-            <div className="flex justify-between text-xs font-mono text-slate-400">
+            <div className="flex justify-between text-xs font-mono text-slate-400 mb-2">
                 <div className="flex items-center gap-1">
                     <Sword size={12} className="text-red-400" /> ATK: {enemy.attack}
                 </div>
                 <div className="flex items-center gap-1">
                     <Shield size={12} className="text-cyan-400" /> DEF: {enemy.defense}
                 </div>
+                <div className="flex items-center gap-1">
+                    <Brain size={12} className="text-purple-400" /> INT: {enemy.intelligence}
+                </div>
+            </div>
+
+            {/* Charm Bar */}
+            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-2">
+                <div 
+                    className="h-full bg-pink-500 transition-all duration-300"
+                    style={{ width: `${(enemy.charmThreshold / enemy.maxCharmThreshold) * 100}%` }}
+                ></div>
             </div>
             
+            {/* Status Badges */}
+            <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                {enemy.statuses.isBroken && (
+                    <div className="text-[10px] bg-red-900/80 text-white px-1.5 py-0.5 rounded border border-red-500 flex items-center gap-1 animate-pulse">
+                        <Shield size={10}/> BROKEN
+                    </div>
+                )}
+                {enemy.statuses.isDisarmed && (
+                    <div className="text-[10px] bg-yellow-900/80 text-white px-1.5 py-0.5 rounded border border-yellow-500 flex items-center gap-1">
+                        <AlertTriangle size={10}/> DISARMED
+                    </div>
+                )}
+                {enemy.statuses.confusedDuration > 0 && (
+                    <div className="text-[10px] bg-purple-900/80 text-white px-1.5 py-0.5 rounded border border-purple-500 flex items-center gap-1 animate-bounce">
+                        <EyeOff size={10}/> CONFUSED ({enemy.statuses.confusedDuration})
+                    </div>
+                )}
+            </div>
+
             <div className="mt-3 pt-2 border-t border-white/10 text-center">
                 <span className="text-[10px] text-slate-500 uppercase">INTENT DETECTED</span>
                 <div className="text-red-400 font-bold flex items-center justify-center gap-2">
@@ -349,6 +388,14 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
         const frontHero = { ...HEROES[frontHeroId] };
         const backHero = { ...HEROES[backHeroId] };
         
+        // Init enemy data with statuses
+        const enemy = {
+            ...enemyData,
+            intelligence: 15, // Default INT for enemies
+            maxCharmThreshold: 100,
+            statuses: { isDisarmed: false, isBroken: false, confusedDuration: 0 }
+        };
+        
         const combinedDeck = [...frontDeck, ...backDeck].sort(() => Math.random() - 0.5);
 
         return {
@@ -357,7 +404,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
             maxMana: 3,
             formation: FormationType.FrontBack,
             players: [frontHero, backHero],
-            enemies: [enemyData], 
+            enemies: [enemy], 
             hand: [],
             deck: combinedDeck,
             discard: [],
@@ -438,7 +485,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
         // --- DETERMINE VFX & SFX ---
         let vfxToPlay: VFXType = 'PROJECTILE';
         
-        // AUDIO TRIGGER LOGIC
         if (card.ownerHeroId === 'kayla') {
             audioService.playKaylaShot();
             if (card.id.includes('beam')) vfxToPlay = 'BEAM';
@@ -459,7 +505,6 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
              audioService.playDefense();
         }
 
-        // Trigger visual
         if (card.type === CardType.Destruction || card.type === CardType.Control) {
             triggerVFX(vfxToPlay, vfxToPlay === 'SONIC' ? 600 : 400);
         }
@@ -472,66 +517,88 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
             newState.discard.push(card);
 
             const targetEnemy = newState.enemies[0]; 
+            const sourceHero = prev.players.find(p => p.id === card.ownerHeroId) || prev.players[0]; // Fallback
             const isSynergy = checkSynergy(prev, card.ownerHeroId, card.type);
 
-            if (card.effectId === 'dmg' || card.effectId.includes('dmg')) {
-                let dmg = calculateDamage(card.value, card.type, prev);
-                if (isSynergy && card.ownerHeroId === 'kayla') dmg = Math.floor(dmg * 1.25);
-                
-                let finalDmg = dmg;
-                if (targetEnemy.defense > 0) {
-                    const overkill = dmg - targetEnemy.defense;
-                    targetEnemy.defense = Math.max(0, targetEnemy.defense - dmg);
-                    finalDmg = Math.max(0, overkill);
-                }
-                targetEnemy.currentHp = Math.max(0, targetEnemy.currentHp - finalDmg);
-                logMsg += `Dealt ${dmg} damage.`;
-
-                // VICTORY CHECK
-                if (targetEnemy.currentHp <= 0) {
-                    setGameResult('victory');
-                }
-
-                const heroName = card.ownerHeroId ? HEROES[card.ownerHeroId].name : 'Team';
-                setDmgStats(stats => {
-                    const newStats = [...stats];
-                    const idx = newStats.findIndex(s => s.name === heroName);
-                    if (idx >= 0) newStats[idx].damage += dmg;
-                    else if (heroName === 'Team') {
-                        newStats[0].damage += Math.floor(dmg/2);
-                        newStats[1].damage += Math.ceil(dmg/2);
+            // INTELLECT CHECK (Core Attribute)
+            if ((card.type === CardType.Control || card.id.includes('debuff')) && shouldNegateEffect(targetEnemy.intelligence, sourceHero.intelligence)) {
+                logMsg += `Effect NEGATED by Enemy Intellect! `;
+                // Only apply damage if any, skip debuffs logic below
+            } else {
+                // Normal Logic
+                if (card.effectId === 'dmg' || card.effectId.includes('dmg')) {
+                    let dmg = calculateDamage(card.value, card.type, prev, targetEnemy); // Pass target for Broken check
+                    if (isSynergy && card.ownerHeroId === 'kayla') dmg = Math.floor(dmg * 1.25);
+                    
+                    let finalDmg = dmg;
+                    if (targetEnemy.defense > 0) {
+                        const overkill = dmg - targetEnemy.defense;
+                        targetEnemy.defense = Math.max(0, targetEnemy.defense - dmg);
+                        finalDmg = Math.max(0, overkill);
                     }
-                    return newStats;
-                });
-                newState.nextDestructionBuff = 0; 
-            } 
-            else if (card.effectId === 'def') {
-                let amount = card.value;
-                if (isSynergy && card.ownerHeroId === 'fiona') amount += 5;
-                newState.players.forEach(p => p.defense += Math.ceil(amount / newState.players.length));
-                logMsg += `Team gained ${amount} Defense.`;
-            }
-            else if (card.effectId === 'buff_atk') {
-                newState.tempAttackBuff += card.value;
-                logMsg += `Attack boosted by ${card.value}.`;
-            }
-            else if (card.effectId === 'draw') {
-                let amount = card.value;
-                if (isSynergy && card.ownerHeroId === 'ella') amount += 1;
-                 let newDeck = [...newState.deck];
-                 let newDiscard = [...newState.discard];
-                 for(let i=0; i<amount; i++) {
-                     if(newDeck.length === 0 && newDiscard.length > 0) {
-                         newDeck = newDiscard.sort(() => Math.random() - 0.5);
-                         newDiscard = [];
+                    targetEnemy.currentHp = Math.max(0, targetEnemy.currentHp - finalDmg);
+                    logMsg += `Dealt ${dmg} damage.`;
+
+                    // Status Update
+                    if (card.effectId.includes('debuff')) {
+                        targetEnemy.attack = Math.max(0, targetEnemy.attack - 5); // Simple debuff logic
+                        logMsg += ` Enemy Atk reduced.`;
+                    }
+                    if (card.effectId.includes('charm')) {
+                        targetEnemy.charmThreshold = Math.max(0, targetEnemy.charmThreshold - card.value);
+                        logMsg += ` Charm Thresh reduced.`;
+                    }
+
+                    // VICTORY CHECK
+                    if (targetEnemy.currentHp <= 0) {
+                        setGameResult('victory');
+                    }
+
+                    const heroName = card.ownerHeroId ? HEROES[card.ownerHeroId].name : 'Team';
+                    setDmgStats(stats => {
+                        const newStats = [...stats];
+                        const idx = newStats.findIndex(s => s.name === heroName);
+                        if (idx >= 0) newStats[idx].damage += dmg;
+                        else if (heroName === 'Team') {
+                            newStats[0].damage += Math.floor(dmg/2);
+                            newStats[1].damage += Math.ceil(dmg/2);
+                        }
+                        return newStats;
+                    });
+                    newState.nextDestructionBuff = 0; 
+                } 
+                else if (card.effectId === 'def') {
+                    let amount = card.value;
+                    if (isSynergy && card.ownerHeroId === 'fiona') amount += 5;
+                    newState.players.forEach(p => p.defense += Math.ceil(amount / newState.players.length));
+                    logMsg += `Team gained ${amount} Defense.`;
+                }
+                else if (card.effectId === 'buff_atk') {
+                    newState.tempAttackBuff += card.value;
+                    logMsg += `Attack boosted by ${card.value}.`;
+                }
+                else if (card.effectId === 'draw') {
+                    let amount = card.value;
+                    if (isSynergy && card.ownerHeroId === 'ella') amount += 1;
+                     let newDeck = [...newState.deck];
+                     let newDiscard = [...newState.discard];
+                     for(let i=0; i<amount; i++) {
+                         if(newDeck.length === 0 && newDiscard.length > 0) {
+                             newDeck = newDiscard.sort(() => Math.random() - 0.5);
+                             newDiscard = [];
+                         }
+                         const drawn = newDeck.pop();
+                         if(drawn) newState.hand.push(drawn);
                      }
-                     const drawn = newDeck.pop();
-                     if(drawn) newState.hand.push(drawn);
-                 }
-                 newState.deck = newDeck;
-                 newState.discard = newDiscard;
-                 logMsg += `Drew ${amount} cards.`;
+                     newState.deck = newDeck;
+                     newState.discard = newDiscard;
+                     logMsg += `Drew ${amount} cards.`;
+                }
             }
+
+            // Update Statuses (Check for Broken, Disarmed, Confused)
+            updateStatuses(targetEnemy);
+            newState.players.forEach(p => updateStatuses(p));
 
             newState.gameLog = [logMsg, ...newState.gameLog].slice(0,8);
             return newState;
@@ -595,6 +662,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
                     audioService.playBuff();
                     break;
             }
+            // Update status
+            newState.players.forEach(p => updateStatuses(p));
             newState.gameLog = [logMsg, ...newState.gameLog].slice(0,8);
             return newState;
         });
@@ -607,23 +676,57 @@ const GameScreen: React.FC<GameScreenProps> = ({ onExit, frontHeroId, backHeroId
             let newState = { ...prev };
             const enemy = newState.enemies[0];
             
+            // --- ENEMY TURN LOGIC ---
             if (enemy.currentHp > 0) {
-                const dmg = enemy.attack;
-                let remainingDmg = dmg;
-                const targetIdx = Math.floor(Math.random() * newState.players.length);
-                const target = newState.players[targetIdx];
                 
-                if (target.defense >= remainingDmg) {
-                    target.defense -= remainingDmg;
-                    remainingDmg = 0;
+                // Check Statuses
+                if (enemy.statuses.isDisarmed) {
+                    newState.gameLog = [`${enemy.name} is DISARMED and skips turn!`, ...newState.gameLog].slice(0,8);
                 } else {
-                    remainingDmg -= target.defense;
-                    target.defense = 0;
-                    target.currentHp -= remainingDmg;
+                    // Handle Confusion
+                    let hitSelf = false;
+                    if (enemy.statuses.confusedDuration > 0) {
+                        if (Math.random() < 0.5) {
+                            hitSelf = true;
+                        }
+                    }
+
+                    const dmg = enemy.attack;
+                    
+                    if (hitSelf) {
+                        enemy.currentHp -= dmg;
+                        newState.gameLog = [`CONFUSED! ${enemy.name} hits ITSELF for ${dmg}!`, ...newState.gameLog].slice(0,8);
+                        triggerVFX('GENERIC_HIT');
+                    } else {
+                        // Normal Attack
+                        let remainingDmg = dmg;
+                        const targetIdx = Math.floor(Math.random() * newState.players.length);
+                        const target = newState.players[targetIdx];
+                        
+                        if (target.defense >= remainingDmg) {
+                            target.defense -= remainingDmg;
+                            remainingDmg = 0;
+                        } else {
+                            remainingDmg -= target.defense;
+                            target.defense = 0;
+                            // Check if target is Broken (Take 50% more damage)
+                            if (target.statuses.isBroken) remainingDmg = Math.floor(remainingDmg * 1.5);
+                            target.currentHp -= remainingDmg;
+                        }
+                        newState.gameLog = [`${enemy.name} hits ${target.name} for ${dmg}!`, ...newState.gameLog].slice(0,8);
+                    }
                 }
-                
-                newState.gameLog = [`${enemy.name} hits ${target.name} for ${dmg}!`, ...newState.gameLog].slice(0,8);
+
+                // Update Enemy Status Durations
+                if (enemy.statuses.confusedDuration > 0) {
+                    enemy.statuses.confusedDuration -= 1;
+                    if (enemy.statuses.confusedDuration === 0) enemy.charmThreshold = enemy.maxCharmThreshold; // Reset charm thresh after confusion ends? Or keep it low? design doesn't specify, usually resets.
+                }
             }
+
+            // Update Player Statuses
+            newState.players.forEach(p => updateStatuses(p));
+            if (enemy) updateStatuses(enemy);
 
             newState.tempAttackBuff = 0;
             newState.maxMana = Math.min(10, newState.maxMana + 1);
